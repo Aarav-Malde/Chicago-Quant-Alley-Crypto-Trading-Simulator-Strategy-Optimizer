@@ -1,0 +1,108 @@
+import requests
+import datetime
+import csv
+import time
+import os
+import json
+from concurrent.futures import ThreadPoolExecutor
+
+# === Setup ===
+headers = {'Accept': 'application/json'}
+DATA_CACHE_DIR = 'data_cache'
+os.makedirs(DATA_CACHE_DIR, exist_ok=True)
+
+def get_btc_price():
+    response = requests.get('https://api.india.delta.exchange/v2/tickers', headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        for ticker in data['result']:
+            if ticker['symbol'] == 'BTCUSD':
+                return float(ticker['mark_price'])
+        raise Exception("BTCUSD ticker not found.")
+    else:
+        raise Exception(f"Failed to fetch BTC price: {response.text}")
+
+def fetch_candle_data(symbol, start_ts, end_ts):
+    filename = os.path.join(DATA_CACHE_DIR, f'{symbol}.json')
+    
+    # Load from cache if available
+    if os.path.exists(filename):
+        with open(filename, 'r') as f:
+            return symbol, json.load(f)
+
+    # Fetch from API
+    params = {
+        'resolution': '5m',
+        'symbol': symbol,
+        'start': str(start_ts),
+        'end': str(end_ts)
+    }
+    response = requests.get('https://api.india.delta.exchange/v2/history/candles',
+                            params=params, headers=headers)
+    if response.status_code == 200:
+        candle_data = response.json().get('result', [])
+        # Save to cache
+        with open(filename, 'w') as f:
+            json.dump(candle_data, f)
+        return symbol, candle_data
+    else:
+        print(f" - Error fetching {symbol}: {response.text}")
+        return symbol, []
+
+# === Main Logic ===
+
+weekday1 = '060525'
+start_date = datetime.datetime.strptime(weekday1, "%d%m%y")
+csv_headers = ['symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume']
+rows = []
+
+btc_price = get_btc_price()
+print(f"\nBTC futures price: {btc_price}")
+
+center = int(round(btc_price / 100) * 100)
+lower_strike = center - 10000
+upper_strike = center + 10000
+step = 100
+
+# Prepare list of tasks
+tasks = []
+for options in ['P', 'C']:
+    for i in range(7):  
+        expiry_date = start_date + datetime.timedelta(days=i)
+        expiry = expiry_date.strftime("%d%m%y")
+
+        print(f"\n=== {options} options for expiry: {expiry} ===")
+        for strike in range(lower_strike, upper_strike + 1, step):
+            symbol = f'{options}-BTC-{strike}-{expiry}'
+
+            start_dt = expiry_date - datetime.timedelta(days=7)
+            start_ts = int(start_dt.replace(hour=0, minute=0, second=0).timestamp())
+            end_ts = int(expiry_date.replace(hour=23, minute=59, second=59).timestamp())
+
+            tasks.append((symbol, start_ts, end_ts))
+
+# Run all fetch tasks in parallel
+print(f"\nLaunching {len(tasks)} concurrent fetch tasks...")
+with ThreadPoolExecutor(max_workers=15) as executor:
+    futures = [executor.submit(fetch_candle_data, symbol, start_ts, end_ts) for symbol, start_ts, end_ts in tasks]
+
+    for future in futures:
+        symbol, candles = future.result()
+        for candle in candles:
+            rows.append([
+                symbol,
+                candle.get('time'),
+                candle.get('open'),
+                candle.get('high'),
+                candle.get('low'),
+                candle.get('close'),
+                candle.get('volume')
+            ])
+
+# Save to CSV
+with open('btc_options_data.csv', mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(csv_headers)
+    writer.writerows(rows)
+
+print(f"\n✅ Data successfully saved to btc_options_data.csv ({len(rows)} rows)")
