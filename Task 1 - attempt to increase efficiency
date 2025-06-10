@@ -75,7 +75,7 @@ for options in ['P', 'C']:
         for strike in range(lower_strike, upper_strike + 1, step):
             symbol = f'{options}-BTC-{strike}-{expiry}'
 
-            start_dt = expiry_date - datetime.timedelta(days=7)
+            start_dt = expiry_date - datetime.timedelta(days=3)
             start_ts = int(start_dt.replace(hour=0, minute=0, second=0).timestamp())
             end_ts = int(expiry_date.replace(hour=23, minute=59, second=59).timestamp())
 
