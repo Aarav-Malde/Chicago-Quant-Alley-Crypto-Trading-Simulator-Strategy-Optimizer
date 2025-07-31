@@ -36,7 +36,7 @@ The coursework covered the following key areas:
 - Random variables, expectations, and convergence theorems.
 - Conditional expectation and the Radon-Nikodym derivative.
 - Brownian motion, quadratic variation, and stochastic calculus.
-- Ito’s Lemma, stochastic differential equations, and martingale theory.
+- Ito’s Lemma, stochastic differential equations, black-scholes equation and martingale theory.
 - Risk-neutral pricing using Girsanov’s theorem.
 - Derivation and application of the Black-Scholes formula.
 - Pricing of derivatives and the martingale representation theorem.
